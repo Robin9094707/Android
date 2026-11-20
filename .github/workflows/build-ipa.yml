@@ -62,6 +62,12 @@ jobs:
           # build-apple-gpu.sh prefers this venv's meson and resolves python3
           # from it, so KosmicKrisp finds mako, packaging and yaml.
           .build/gpu-tools-venv/bin/python -c 'import mako, packaging, yaml'
+          # Mesa's glcpp/GLSL grammars need Bison 3; macOS ships Bison 2.3 at
+          # /usr/bin. This venv's bin is first on Mesa's tool path, so a Bison 3
+          # (and flex) symlink here is used by both the Vulkan and OpenGL passes.
+          ln -sf "$(brew --prefix bison)/bin/bison" .build/gpu-tools-venv/bin/bison
+          ln -sf "$(brew --prefix flex)/bin/flex" .build/gpu-tools-venv/bin/flex
+          .build/gpu-tools-venv/bin/bison --version | head -1
 
       - name: Prepare and build the iOS dependency prefixes
         run: |
