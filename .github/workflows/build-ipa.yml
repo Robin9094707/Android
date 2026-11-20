@@ -83,10 +83,16 @@ jobs:
       - name: Prepare and build the iOS dependency prefixes
         run: |
           set -eux
-          # dependencies/prepare.sh fetches pinned commits from upstream hosts
-          # (gitlab.gnome.org among them), which intermittently return 503.
-          # Retry the fetch a few times; it resumes from the git cache and
-          # verifies, so a repeat is cheap and idempotent.
+          # gitlab.gnome.org persistently returns 503 to the runners, so fetch
+          # glib and gvdb from GNOME's GitHub mirror instead. The pinned commit
+          # is still verified (the tag 2.90.1 peels to the pinned glib commit,
+          # and the gvdb commit is reachable on the mirror), so provenance is
+          # unchanged; only the transport is redirected.
+          git config --global \
+            url."https://github.com/GNOME/".insteadOf "https://gitlab.gnome.org/GNOME/"
+          # dependencies/prepare.sh fetches pinned commits from upstream hosts,
+          # which can still return a transient 503. Retry a few times; it
+          # resumes from the git cache and verifies, so a repeat is cheap.
           prepare() {
             for attempt in 1 2 3 4 5; do
               if dependencies/prepare.sh "$@"; then return 0; fi
