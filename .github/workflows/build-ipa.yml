@@ -53,6 +53,16 @@ jobs:
           rustup target add aarch64-apple-ios
           rustc --version
 
+      - name: Set up the GPU build venv (meson + Mesa Python modules)
+        run: |
+          set -eux
+          python3 -m venv .build/gpu-tools-venv
+          .build/gpu-tools-venv/bin/pip install --upgrade pip
+          .build/gpu-tools-venv/bin/pip install meson mako packaging pyyaml
+          # build-apple-gpu.sh prefers this venv's meson and resolves python3
+          # from it, so KosmicKrisp finds mako, packaging and yaml.
+          .build/gpu-tools-venv/bin/python -c 'import mako, packaging, yaml'
+
       - name: Prepare and build the iOS dependency prefixes
         run: |
           set -eux
