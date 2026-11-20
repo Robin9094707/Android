@@ -69,17 +69,50 @@ jobs:
           ln -sf "$(brew --prefix flex)/bin/flex" .build/gpu-tools-venv/bin/flex
           .build/gpu-tools-venv/bin/bison --version | head -1
 
+      - name: Restore the dependency source and git cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            external/sources
+            .build/dependency-cache
+          key: deps-src-${{ hashFiles('dependencies/manifest.tsv') }}-${{ github.run_id }}
+          restore-keys: |
+            deps-src-${{ hashFiles('dependencies/manifest.tsv') }}-
+            deps-src-
+
       - name: Prepare and build the iOS dependency prefixes
         run: |
           set -eux
-          dependencies/prepare.sh --product ios-compression
+          # dependencies/prepare.sh fetches pinned commits from upstream hosts
+          # (gitlab.gnome.org among them), which intermittently return 503.
+          # Retry the fetch a few times; it resumes from the git cache and
+          # verifies, so a repeat is cheap and idempotent.
+          prepare() {
+            for attempt in 1 2 3 4 5; do
+              if dependencies/prepare.sh "$@"; then return 0; fi
+              echo "prepare.sh $* failed (attempt $attempt); retrying in 20s" >&2
+              sleep 20
+            done
+            echo "prepare.sh $* failed after retries" >&2
+            return 1
+          }
+          prepare --product ios-compression
           dependencies/build-ios-zstd.sh
-          dependencies/prepare.sh --product ios-storage
+          prepare --product ios-storage
           dependencies/build-ios-storage.sh
-          dependencies/prepare.sh --product ios-network
+          prepare --product ios-network
           dependencies/build-ios-network.sh --platform ios
-          dependencies/prepare.sh --product apple-gpu-vulkan-experiment
+          prepare --product apple-gpu-vulkan-experiment
           dependencies/build-apple-gpu.sh --platform ios
+
+      - name: Save the dependency source and git cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            external/sources
+            .build/dependency-cache
+          key: deps-src-${{ hashFiles('dependencies/manifest.tsv') }}-${{ github.run_id }}
 
       - name: Install the accepted Android kernel bundle
         run: |
