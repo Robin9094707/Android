@@ -42,9 +42,11 @@ jobs:
       - name: Install build tools
         run: |
           brew update
-          brew install cmake ninja meson bison flex pkg-config nasm
+          brew install cmake ninja meson bison flex pkg-config nasm \
+            autoconf automake libtool gettext
           echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix flex)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix gettext)/bin" >> "$GITHUB_PATH"
 
       - name: Add the iOS Rust target
         run: |
