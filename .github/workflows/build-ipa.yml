@@ -36,8 +36,28 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Select the newest Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)/Contents/Developer"
+      - name: Select Xcode 27 (the iOS 27 SDK the project requires)
+        run: |
+          set -eux
+          # The project builds against a 27.0 deployment target and uses iOS 27
+          # APIs with no fallback (docs/architecture.md, Config/Andarium.xcconfig),
+          # so it needs the iOS 27 SDK from Xcode 27. Pick the newest Xcode whose
+          # iPhoneOS SDK is 27 or later; fail early with a clear message if the
+          # runner image has none yet (GitHub-hosted runners add new Xcodes some
+          # weeks after release).
+          chosen=""
+          for app in $(ls -d /Applications/Xcode_*.app | sort -Vr); do
+            sdk="$app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
+            ver=$(/usr/libexec/PlistBuddy -c 'Print :Version' "$sdk/SDKSettings.plist" 2>/dev/null || echo 0)
+            major=${ver%%.*}
+            if [ "${major:-0}" -ge 27 ]; then chosen="$app"; echo "iOS SDK $ver in $app"; break; fi
+          done
+          if [ -z "$chosen" ]; then
+            echo "::error::No Xcode with an iOS 27+ SDK on this runner (newest: $(ls -d /Applications/Xcode_*.app | sort -V | tail -1)). This project requires the iOS 27 SDK; re-run once the runner image ships Xcode 27, or use a self-hosted Mac with Xcode 27." >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$chosen/Contents/Developer"
+          xcodebuild -version
 
       - name: Install build tools
         run: |
