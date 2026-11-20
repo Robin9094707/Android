@@ -33,6 +33,11 @@ using ::uml::cpu::JitMemoryStatus;
 /* Tells an attached debugger to detach, for a process that will not use JIT. */
 void release_jit_debugger() noexcept;
 
+/* Installs the host's own debugger for the JIT's memory (the built-in JIT);
+ * see jit_memory::set_host_blesser. nullptr removes it. */
+void set_jit_host_blesser(int (*blesser)(void *context, std::uint64_t address,
+	std::uint64_t length), void *context) noexcept;
+
 /* The bytes of executable memory a debugger prepared for this process, zero
  * before one did. They stay wired for the life of the process, used by a JIT
  * run or not. */

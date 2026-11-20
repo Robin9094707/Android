@@ -2,6 +2,7 @@
 
 import AndariumCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A titled section of Home: rows in one glass panel under a small heading,
 /// and a note beneath.
@@ -523,12 +524,13 @@ extension View {
 
 // MARK: JIT
 
-/// Whether the guest runs on the JIT engine, which a debugger the person
-/// attached (StikDebug) makes possible, and what the next start can do about
-/// it. It applies when the guest next starts. An App Store build has no JIT
-/// and no such section.
+/// Whether the guest runs on the JIT engine, which a debugger makes possible,
+/// and what the next start can do about it. The debugger is either StikDebug or
+/// the built-in JIT the person couples here. It applies when the guest next
+/// starts. An App Store build has no JIT and no such section.
 struct JitSection: View {
     @Environment(AppModel.self) private var model
+    @State private var importingPairing = false
 
     var body: some View {
         if model.jitAvailable, model.guest != nil {
@@ -540,11 +542,94 @@ struct JitSection: View {
                     )) { Text(verbatim: "JIT") }
                     .labelsHidden()
                 }
+                RowDivider()
+                BuiltInJitRow(importingPairing: $importingPairing)
             } footer: {
                 SectionNote(model.jitStatus.footer)
             }
             .id("jit")
             .task { model.refreshJit() }
+            .fileImporter(
+                isPresented: $importingPairing,
+                allowedContentTypes: BuiltInJitRow.pairingTypes,
+                allowsMultipleSelection: false
+            ) { result in
+                model.importBuiltInPairing(result)
+            }
+        }
+    }
+}
+
+/// The built-in JIT's rows under the JIT switch: a switch to turn it on, a row
+/// to couple the device with a pairing file, and, once coupled, a row to
+/// forget it. With it on and coupled, a start prepares the JIT through the
+/// device's own debugserver, so StikDebug is not needed.
+struct BuiltInJitRow: View {
+    @Environment(AppModel.self) private var model
+    @Binding var importingPairing: Bool
+
+    /// What a pairing file may be: a plist, or any file the person points at.
+    static let pairingTypes: [UTType] = [.propertyList, .xml, .data]
+
+    var body: some View {
+        OptionRow(
+            title: String(localized: "Built-in JIT", table: "JIT",
+                comment: "Switch on Home that turns on the experimental built-in JIT, which prepares the JIT without StikDebug. JIT is a name and stays as it is."),
+            symbol: "bolt.badge.automatic.fill",
+            detail: String(localized: "Experimental. Prepares the JIT without StikDebug.", table: "JIT",
+                comment: "Line under the Built-in JIT switch. JIT and StikDebug are names and stay as they are.")
+        ) {
+            Toggle(isOn: Binding(
+                get: { model.builtInJitEnabled },
+                set: { model.setBuiltInJit($0) }
+            )) { Text(verbatim: "Built-in JIT") }
+            .labelsHidden()
+        }
+        if model.builtInJitEnabled {
+            RowDivider()
+            OptionRow(
+                title: model.builtInJitCoupled
+                    ? String(localized: "Device coupled", table: "JIT",
+                        comment: "Row on Home: the device is coupled for the built-in JIT.")
+                    : String(localized: "Couple device", table: "JIT",
+                        comment: "Row on Home: couple the device for the built-in JIT by importing a pairing file."),
+                symbol: "iphone.and.arrow.forward",
+                detail: couplingDetail
+            ) {
+                Button(model.builtInJitCoupled
+                    ? String(localized: "Change", table: "JIT", comment: "Button to replace the stored pairing file.")
+                    : String(localized: "Pair", table: "JIT", comment: "Button to import a pairing file and couple the device.")
+                ) { importingPairing = true }
+                .buttonStyle(.bordered)
+            }
+            if model.builtInJitCoupled {
+                RowDivider()
+                OptionRow(
+                    title: String(localized: "Forget pairing", table: "JIT",
+                        comment: "Row on Home: remove the stored pairing file."),
+                    symbol: "trash"
+                ) {
+                    Button(role: .destructive) {
+                        model.removeBuiltInPairing()
+                    } label: {
+                        Text(String(localized: "Forget", table: "JIT", comment: "Button to remove the stored pairing file."))
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+
+    private var couplingDetail: String {
+        switch model.builtInJitCoupling {
+        case .coupled:
+            String(localized: "The next start prepares the JIT itself.", table: "JIT",
+                comment: "Line under the coupling row when the device is coupled. JIT is a name and stays as it is.")
+        case .needsPairing:
+            String(localized: "Import this device's pairing file to couple it.", table: "JIT",
+                comment: "Line under the coupling row when no pairing file is stored.")
+        case .off:
+            ""
         }
     }
 }

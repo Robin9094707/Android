@@ -119,6 +119,27 @@ enum class RegionStatus : std::uint8_t {
  * when no debugger is attached or the route does not exist. */
 void release_debugger() noexcept;
 
+/* The host's own debugger (the built-in JIT).
+ *
+ * A host that can attach a debugger to its own process (Andarium's built-in
+ * JIT, which reaches the device's debugserver through a paired tunnel) gives
+ * the route a function that blesses a region in one call: it attaches, writes
+ * one byte into every 16 KiB page of [address, address + length) through the
+ * debugger, detaches, and returns zero once the process runs again unattached.
+ * Any other value is a failure. With one installed, a process that no debugger
+ * holds still prepares its region: the region is mapped as for an attached
+ * debugger and blessed through the host, with no breakpoint request. The
+ * function runs on the thread that prepares the region and must not return
+ * before the debugger has detached. */
+using HostBlesser = int (*)(void *context, std::uint64_t address,
+	std::uint64_t length);
+
+/* Installs the host's blesser (nullptr removes it). Safe from any thread. */
+void set_host_blesser(HostBlesser blesser, void *context) noexcept;
+
+/* Whether a host blesser is installed. */
+[[nodiscard]] bool host_blesser_installed() noexcept;
+
 /* The bytes of the prepared region, zero before it is ready. */
 [[nodiscard]] std::size_t prepared_region_bytes() noexcept;
 

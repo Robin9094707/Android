@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -69,6 +70,10 @@ extern "C" int csops(pid_t pid, unsigned int operation, void *buffer,
 
 namespace uml::cpu::jit_memory {
 namespace {
+
+/* The host's own debugger (set_host_blesser), and what it is called with. */
+constinit std::atomic<HostBlesser> host_blesser{nullptr};
+constinit std::atomic<void *> host_blesser_context{nullptr};
 
 /* Publication route for MAP_JIT memory.
  *
@@ -543,7 +548,9 @@ public:
 						      : RegionStatus::smaller;
 		if (spent_)
 			return RegionStatus::failed;
-		if (!traced())
+		const bool attached = traced();
+		auto *const blesser = host_blesser.load(std::memory_order_acquire);
+		if (!attached && blesser == nullptr)
 			return RegionStatus::no_debugger;
 		const auto size = granules * region_granule;
 		std::byte *executable = nullptr;
@@ -552,6 +559,9 @@ public:
 			note("the region could not be mapped");
 			return RegionStatus::failed;
 		}
+		if (!attached)
+			return finish_host_blessing(blesser, executable, writable,
+				size, granules);
 		const auto prepared = ask_debugger(
 			1, reinterpret_cast<std::uintptr_t>(executable), size);
 		if (prepared == Reply::no_debugger) {
@@ -580,6 +590,43 @@ public:
 			note("the debugger did not detach");
 			return RegionStatus::failed;
 		}
+		return complete(executable, writable, size, granules);
+	}
+
+	/* The built-in JIT: the host's own debugger blesses the region in one
+	 * call and has detached when it returns. */
+	[[nodiscard]] RegionStatus finish_host_blessing(HostBlesser blesser,
+		std::byte *executable, std::byte *writable, std::size_t size,
+		std::size_t granules) noexcept
+	{
+		const auto status = blesser(
+			host_blesser_context.load(std::memory_order_acquire),
+			reinterpret_cast<std::uintptr_t>(executable), size);
+		if (status != 0) {
+			std::fprintf(stderr,
+				"Kernarium: JIT memory: the built-in debugger did not prepare the region (%d)\n",
+				status);
+			/* A session that failed before it attached left nothing
+			 * behind, and the pages that a session which did attach
+			 * blessed are proved by nothing: either way the region goes
+			 * back and the process may try again. */
+			give_back(executable, writable, size);
+			return traced() ? RegionStatus::failed
+					: RegionStatus::no_debugger;
+		}
+		/* From here the process has been under a debugger. */
+		spent_ = true;
+		if (traced()) {
+			note("the built-in debugger did not detach");
+			return RegionStatus::failed;
+		}
+		return complete(executable, writable, size, granules);
+	}
+
+	/* Wires a blessed region, proves it runs code and publishes it. */
+	[[nodiscard]] RegionStatus complete(std::byte *executable,
+		std::byte *writable, std::size_t size, std::size_t granules) noexcept
+	{
 		if (mlock(writable, size) != 0) {
 			note("the region could not be wired", true);
 			give_back(executable, writable, size);
@@ -884,6 +931,21 @@ void release_debugger() noexcept
 #if UML_JIT_MEMORY_REGION_ROUTE
 	if (traced())
 		(void)ask_debugger(0, 0, 0);
+#endif
+}
+
+void set_host_blesser(HostBlesser blesser, void *context) noexcept
+{
+	host_blesser_context.store(context, std::memory_order_release);
+	host_blesser.store(blesser, std::memory_order_release);
+}
+
+bool host_blesser_installed() noexcept
+{
+#if UML_JIT_MEMORY_REGION_ROUTE
+	return host_blesser.load(std::memory_order_acquire) != nullptr;
+#else
+	return false;
 #endif
 }
 

@@ -1149,6 +1149,20 @@ typedef struct kernarium_runtime_api {
 KERNARIUM_RUNTIME_EXPORT
 const kernarium_runtime_api* kernarium_runtime_get_api_v28(void);
 
+/* The built-in JIT, outside the versioned table: a runtime that can prepare
+ * executable memory through a debugger exports this symbol, and the
+ * application looks it up without requiring it. The host installs a function
+ * that attaches its own debugger to the process, blesses every 16 KiB page of
+ * [address, address + length) with one byte written through it, detaches and
+ * returns zero once the process runs unattached again. With one installed,
+ * prepare_jit prepares the memory although no debugger is attached. nullptr
+ * removes it. */
+typedef int (*kernarium_runtime_jit_host_blesser)(
+    void* context, uint64_t address, uint64_t length);
+KERNARIUM_RUNTIME_EXPORT
+void kernarium_runtime_set_jit_host_blesser(
+    kernarium_runtime_jit_host_blesser blesser, void* context);
+
 /* An automation-only extension, outside the versioned table: only a runtime
  * built for automation exports this symbol, and the application looks it up
  * without requiring it. It returns nonzero when the launch asked, through the

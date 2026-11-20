@@ -60,6 +60,12 @@ void release_jit_debugger() noexcept
 	jit_memory::release_debugger();
 }
 
+void set_jit_host_blesser(int (*blesser)(void *context, std::uint64_t address,
+	std::uint64_t length), void *context) noexcept
+{
+	jit_memory::set_host_blesser(blesser, context);
+}
+
 std::size_t prepared_jit_region_bytes() noexcept
 {
 	return jit_memory::prepared_region_bytes();

@@ -111,6 +111,12 @@ void release_jit_debugger() noexcept
 	arm64::release_jit_debugger();
 }
 
+void set_jit_host_blesser(int (*blesser)(void *context, std::uint64_t address,
+	std::uint64_t length), void *context) noexcept
+{
+	arm64::set_jit_host_blesser(blesser, context);
+}
+
 std::size_t prepared_jit_region_bytes() noexcept
 {
 	return arm64::prepared_jit_region_bytes();

@@ -31,6 +31,11 @@ bool selectionAttempted;
  * a release runtime does not export them. */
 int (*automationJobAtStart)(void);
 int (*automationHoldDelayMs)(void);
+/* The built-in JIT: the host's debugger the application installed, and the
+ * selected runtime's entry that takes it (null in a runtime without one). */
+std::atomic<kernarium_runtime_jit_host_blesser> jitHostBlesser {nullptr};
+std::atomic<void*> jitHostBlesserContext {nullptr};
+std::atomic<void (*)(kernarium_runtime_jit_host_blesser, void*)> setRuntimeJitHostBlesser {nullptr};
 #endif
 /* The runtime relay can still call into the loader while exit() destroys
  * ordinary statics. Keep its lock and retained handler alive together. */
@@ -451,6 +456,17 @@ __attribute__((constructor)) void isolateGuestTimerFromApplicationThreads()
     automationHoldDelayMs = reinterpret_cast<int (*)(void)>(
         dlsym(handle, "kernarium_runtime_automation_hold_delay_ms"));
     (void)dlerror();
+    /* Optional: a runtime that can prepare JIT memory takes the host's own
+     * debugger, which the application may have installed before. */
+    const auto setBlesser = reinterpret_cast<
+        void (*)(kernarium_runtime_jit_host_blesser, void*)>(
+        dlsym(handle, "kernarium_runtime_set_jit_host_blesser"));
+    (void)dlerror();
+    setRuntimeJitHostBlesser.store(setBlesser, std::memory_order_release);
+    if (setBlesser != nullptr)
+        setBlesser(
+            jitHostBlesser.load(std::memory_order_acquire),
+            jitHostBlesserContext.load(std::memory_order_acquire));
 #endif
     selectedFlavor = guestFlavor;
     selectedApi.store(api, std::memory_order_release);
@@ -1048,6 +1064,25 @@ extern "C" int kernarium_runtime_loader_prepare_jit(
     return runtime == nullptr
         ? KERNARIUM_RUNTIME_JIT_UNSUPPORTED
         : runtime->prepare_jit(enable, guestMemoryMiB, guestProcessorCount);
+}
+
+extern "C" void kernarium_runtime_loader_set_jit_host_blesser(
+    kernarium_runtime_jit_host_blesser blesser,
+    void* context)
+{
+    jitHostBlesserContext.store(context, std::memory_order_release);
+    jitHostBlesser.store(blesser, std::memory_order_release);
+    if (const auto setBlesser =
+            setRuntimeJitHostBlesser.load(std::memory_order_acquire))
+        setBlesser(blesser, context);
+}
+
+extern "C" int kernarium_runtime_loader_jit_host_blesser_supported(void)
+{
+    return api() == nullptr ||
+            setRuntimeJitHostBlesser.load(std::memory_order_acquire) != nullptr
+        ? 1
+        : 0;
 }
 
 extern "C" int kernarium_runtime_loader_debugger_attached(void)

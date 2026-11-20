@@ -287,6 +287,15 @@ int kernarium_runtime_loader_prepare_jit(
 /* Whether a debugger is attached to this process, which the application knows
  * before any runtime is loaded. */
 int kernarium_runtime_loader_debugger_attached(void);
+/* Installs the application's own debugger for the JIT (the built-in JIT; see
+ * kernarium_runtime_set_jit_host_blesser). It is kept for every runtime the
+ * loader selects, before or after this call. nullptr removes it. */
+void kernarium_runtime_loader_set_jit_host_blesser(
+    kernarium_runtime_jit_host_blesser blesser,
+    void* context);
+/* Nonzero unless the selected runtime cannot take the built-in JIT's
+ * debugger. Before a runtime is selected it answers nonzero. */
+int kernarium_runtime_loader_jit_host_blesser_supported(void);
 #endif
 /* Turns the guest's microphone on (nonzero) or off (zero), as
  * kernarium_runtime_set_microphone_function does, and returns the resulting

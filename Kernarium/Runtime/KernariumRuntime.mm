@@ -3547,6 +3547,14 @@ kernarium_runtime_automation_hold_delay_ms(void)
 }
 #endif
 
+#ifndef UML_APP_STORE_RUNTIME
+extern "C" KERNARIUM_RUNTIME_EXPORT void kernarium_runtime_set_jit_host_blesser(
+    kernarium_runtime_jit_host_blesser blesser, void* context)
+{
+    uml::runtime::set_jit_host_blesser(blesser, context);
+}
+#endif
+
 extern "C" const kernarium_runtime_api* kernarium_runtime_get_api_v28(void)
 {
     return &runtimeApi;

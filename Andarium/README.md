@@ -953,6 +953,20 @@ requires reopening Andarium.
   slower than on gadgets, and a long single-process computation runs faster. An
   App Store build carries none of this: its runtime has no JIT and the
   application has no row, preference, entries or sentences.
+- **Built-in JIT (experimental).** Under the JIT row, a development build has a
+  Built-in JIT switch and, with it on, a row to couple the device by importing
+  its pairing file (`BuiltInJit`, `Live/BuiltInJitSession.swift`). Coupled,
+  Andarium prepares the JIT itself through the device's own debugserver over a
+  loopback tunnel (the vendored idevice library, `ThirdParty/idevice`,
+  installed as the runtime's host blesser), so the separate StikDebug app is not
+  needed; a start that prepares the JIT this way posts a notification
+  (`JitNotification`). It is off by default and never runs at launch or on the
+  main thread, because a process that attaches a debugger to itself can be
+  suspended by the system; a start that cannot complete the blessing falls back
+  to gadgets exactly as a missing StikDebug does. StikDebug stays the proven
+  route and is used whenever it is attached. An App Store build carries none of
+  this: idevice is not linked and the switch, the session and the notification
+  are compiled out.
 - **Motion.** The guest has the device's accelerometer and gyroscope wherever
   the device has them, with no setting and no permission. An iPad app on a Mac
   and the Simulator have none, so nothing is read there, and Android still

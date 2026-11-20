@@ -586,6 +586,12 @@ void release_jit_debugger() noexcept
 	::uml::cpu::release_jit_debugger();
 }
 
+void set_jit_host_blesser(int (*blesser)(void *context, std::uint64_t address,
+	std::uint64_t length), void *context) noexcept
+{
+	::uml::cpu::set_jit_host_blesser(blesser, context);
+}
+
 std::size_t prepared_jit_region_bytes() noexcept
 {
 	return ::uml::cpu::prepared_jit_region_bytes();

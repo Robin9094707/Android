@@ -94,6 +94,11 @@ using JitMemoryStatus = ::uml::cpu::JitMemoryStatus;
 [[nodiscard]] bool jit_debugger_attached() noexcept;
 void release_jit_debugger() noexcept;
 
+/* Installs the host's own debugger for the JIT's memory (the built-in JIT);
+ * see jit_memory::set_host_blesser. nullptr removes it. */
+void set_jit_host_blesser(int (*blesser)(void *context, std::uint64_t address,
+	std::uint64_t length), void *context) noexcept;
+
 /* The executable memory a debugger prepared and the process keeps wired, in
  * bytes, zero before any. A run that does not use it still carries it, so the
  * run's memory plan counts it. */

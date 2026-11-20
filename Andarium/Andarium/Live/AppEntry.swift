@@ -234,6 +234,10 @@ struct AppEntry {
             model.location?.refresh()
             model.camera?.refresh()
             #if !APP_STORE
+            // The built-in JIT registers its blesser with the loader if the
+            // person coupled the device. This only installs a function the
+            // runtime calls at a start; it attaches nothing now.
+            BuiltInJit.shared.install()
             // A debugger attached at launch (StikDebug) is asked for what the
             // JIT row says at once: it spins until it is served, and the
             // system ends it within a minute. A guest the launch is about to

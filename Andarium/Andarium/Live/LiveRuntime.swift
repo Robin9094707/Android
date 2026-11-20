@@ -538,6 +538,10 @@ final class LiveRuntime: RuntimeDriver {
         JitDebugger.attached()
     }
 
+    func jitExternalDebuggerAttached() -> Bool {
+        JitDebugger.externalAttached()
+    }
+
     func prepareJit(wanted: Bool, shape: JitShape) async -> JitAnswer {
         await JitDebugger.prepare(wanted: wanted, shape: shape, flavor: Self.androidFlavor)
     }

@@ -257,8 +257,14 @@ final class AppModel {
     /// What is kept of the JIT row across launches (`JitPreference`); nil
     /// where the launch decided it.
     var jitToKeep: Bool? { jitDecidedByLaunch ? nil : jitOn }
-    /// A debugger is attached to Andarium, as last read.
+    /// A debugger is attached to Andarium, as last read: StikDebug, or the
+    /// built-in JIT coupled.
     var jitDebuggerAttached = false
+    /// An external servicing debugger (StikDebug) is attached, as last read.
+    /// The launch prepares the memory early only for this one, because it
+    /// spins while it waits; the built-in JIT connects on demand at the start
+    /// instead, so it is never prepared at launch.
+    var jitExternalDebuggerAttached = false
     /// What the executable memory was prepared for, once a start has done it.
     var jitPrepared: JitShape?
     /// How the last start answered, when it ran without the JIT it was asked
@@ -297,8 +303,12 @@ final class AppModel {
         let current = replacingGuest
             ? nil : guest.map { JitShape(memoryMiB: $0.memoryMiB, processorCount: $0.cores) }
         let wanted = jitOn
+        // Only an external debugger (StikDebug) is prepared at launch: it
+        // spins while it waits. The built-in JIT connects on demand at the
+        // start, so it must not run here, where a self-attach could wedge the
+        // application as it opens.
         guard let request = JitLaunchRequest.atLaunch(
-            wanted: wanted, debuggerAttached: jitDebuggerAttached, guest: current, standard: standard)
+            wanted: wanted, debuggerAttached: jitExternalDebuggerAttached, guest: current, standard: standard)
         else { return }
         let shape: JitShape
         switch request {
@@ -353,6 +363,9 @@ final class AppModel {
             jitPrepared = shape
             jitLastStart = nil
             print("Andarium: JIT ready")
+            // Tell the person the JIT is on for this start, when the built-in
+            // JIT prepared it (StikDebug shows its own).
+            if builtInJitEnabled { JitNotification.jitReady() }
             return true
         case .disabled:
             jitLastStart = nil
@@ -371,9 +384,58 @@ final class AppModel {
     /// Reads whether a debugger is attached now. The preview plays one.
     func refreshJit() {
         jitDebuggerAttached = driver?.jitDebuggerAttached() ?? previewJitDebugger
+        jitExternalDebuggerAttached = driver?.jitExternalDebuggerAttached() ?? previewJitDebugger
     }
     /// Whether the preview, which has no runtime, plays a debugger.
     var previewJitDebugger = true
+
+    // MARK: Built-in JIT
+
+    /// Whether the built-in JIT is turned on (experimental): Andarium prepares
+    /// the JIT itself through the device's own debugserver, so the separate
+    /// StikDebug app is not needed. It applies to the next start.
+    var builtInJitEnabled: Bool { BuiltInJit.shared.isEnabled }
+    /// Where the built-in JIT stands: off, needs a pairing file, or coupled.
+    var builtInJitCoupling: BuiltInJitCoupling { BuiltInJit.shared.coupling }
+    /// Whether the device is coupled (a pairing file is stored and the toggle
+    /// is on), so the next start can prepare the JIT itself.
+    var builtInJitCoupled: Bool { builtInJitCoupling == .coupled }
+
+    /// Turns the built-in JIT on or off. Turning it on asks for permission to
+    /// notify, so a start can say the JIT is ready.
+    func setBuiltInJit(_ on: Bool) {
+        BuiltInJit.shared.setEnabled(on)
+        if on { JitNotification.requestAuthorization() }
+        refreshJit()
+    }
+
+    /// Stores the pairing file the person picked, or shows why it failed.
+    func importBuiltInPairing(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            do {
+                try BuiltInJit.shared.importPairing(from: url)
+                refreshJit()
+            } catch {
+                alert = AppAlert(
+                    title: String(localized: "The pairing file could not be read", table: "JIT",
+                        comment: "Alert title when importing a device pairing file for the built-in JIT failed."),
+                    message: error.localizedDescription)
+            }
+        case .failure(let error):
+            alert = AppAlert(
+                title: String(localized: "The pairing file could not be read", table: "JIT",
+                    comment: "Alert title when importing a device pairing file for the built-in JIT failed."),
+                message: error.localizedDescription)
+        }
+    }
+
+    /// Forgets the stored pairing file.
+    func removeBuiltInPairing() {
+        BuiltInJit.shared.removePairing()
+        refreshJit()
+    }
     #endif
     /// How the last run ended, for the screen that says so.
     var runEnd = RunEnd(result: 0)

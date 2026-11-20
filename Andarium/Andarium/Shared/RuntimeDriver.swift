@@ -246,8 +246,12 @@ protocol RuntimeDriver: AnyObject, OldAppsSource {
     func runningSeconds() -> Int?
     #endif
     #if !APP_STORE
-    /// Whether a debugger that serves the JIT is attached to Andarium now.
+    /// Whether a debugger that serves the JIT is attached to Andarium now:
+    /// StikDebug, or the built-in JIT coupled.
     func jitDebuggerAttached() -> Bool
+    /// Whether an external servicing debugger (StikDebug) is attached now, the
+    /// only kind the launch prepares the JIT for.
+    func jitExternalDebuggerAttached() -> Bool
     /// Prepares the JIT's executable memory for `shape` when `wanted`, or
     /// tells an attached debugger to leave when not, and says how it came
     /// out. It takes the seconds the debugger takes and never blocks the main
@@ -271,6 +275,11 @@ extension RuntimeDriver {
     /// A driver with no display has no picture, and no run to time.
     func captureGuestDisplay() -> UIImage? { nil }
     func runningSeconds() -> Int? { nil }
+    #endif
+    #if !APP_STORE
+    /// A driver that does not tell the two apart treats every attached
+    /// debugger as external (the launch's early preparation).
+    func jitExternalDebuggerAttached() -> Bool { jitDebuggerAttached() }
     #endif
 }
 
